@@ -9,8 +9,10 @@ the output for a choice of CSS libraries.
 ## Usage
 The unit tests include a complete example of usage.
 
-Instantiate the `PNav` trait with the type `C` that will define the context of each 
-menu entry, and the type `A` that will define the action of a menu selection:
+Instantiate the `PNav` trait with the type `C` that will supply additional 
+contextual information for each menu entry, the type `A` that will 
+define the action resulting from a menu selection, and the type `R` that
+defines the context in which the menu is rendered (e.g. an HTTP request).
 
 ```scala
 import pnav.PNav
@@ -26,12 +28,13 @@ object MyEntryState extends MyNav.EntryState {
 }
 ```
 
-Implement a suitable renderer with the type `R` of an element of the rendered output:
+Implement a suitable renderer with the type `D` of an element of the rendered output,
+and the type `R` of a runtime context, e.g. an incoming HTTP request:
 
 ```scala
 import org.w3c.dom
 
-object MyXmlRenderer extends MyNav.Renderer[dom.Element] {
+object MyXmlRenderer extends MyNav.Renderer[dom.Element, play.api.Request[_]] {
   // TODO: implement.
 }
 ```
@@ -49,6 +52,7 @@ val menu = root (
 
 And render it:
 ```scala
+implicit val req = getCurrentRequest()
 val xmlElement = MyNav.render(menu, MyEntryStste, MyXmlRenderer)
 ```
 

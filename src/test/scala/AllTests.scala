@@ -15,20 +15,24 @@ object AllTests extends TestSuite {
 
   val tests: Tests = Tests {
     test("generate text menu") {
+      implicit val req: RequestT = Fixtures.RequestT("app")
       val str = TheNav.render(sampleMenu, TheEntryState, TextRenderer)
       assert(str.isDefined)
     }
 
     test("check xml menu") {
+      implicit val req: RequestT = Fixtures.RequestT("app")
       TheNav.render(sampleMenu, TheEntryState, XmlRenderer).foreach { xml: Element =>
-        val xpath = XPathFactory.newInstance().newXPath()
-        xpath.evaluate("""//entry[@enabled='false']""", xml, XPathConstants.NODESET) match {
-          case ns: NodeList =>
-            assert(ns.getLength == 2)
+        val nl = queryNodes("//entry[@enabled='false']", xml)
+        assert(nl.getLength == 2)
+      }
+    }
 
-          case _ =>
-            assert(false)
-        }
+    test("check current entry") {
+      implicit val req: RequestT = Fixtures.RequestT("app")
+      TheNav.render(sampleMenu, TheEntryState, XmlRenderer).foreach { xml: Element =>
+        val nl = queryNodes("//entry[@current='true']", xml)
+        assert(nl.getLength == 1)
       }
     }
   }
@@ -36,9 +40,12 @@ object AllTests extends TestSuite {
 
 object Fixtures {
 
-  object TheNav extends PNav[Int, String]
+  case class RequestT(path: String)
+
+  object TheNav extends PNav[Int, String, RequestT]
 
   import TheNav._
+
 
   def sampleMenu: Menu = {
     root (
@@ -55,9 +62,9 @@ object Fixtures {
   }
 
   object TheEntryState extends TheNav.EntryState {
-    def isEnabled(context: String): Boolean = !Seq("blah", "ban").contains(context)
-    def isVisible(context: String): Boolean = context != "can"
-    def isCurrent(context: String): Boolean = context == "app"
+    def isEnabled(context: String)(implicit req: RequestT): Boolean = !Seq("blah", "ban").contains(context)
+    def isVisible(context: String)(implicit req: RequestT): Boolean = context != "can"
+    def isCurrent(context: String)(implicit req: RequestT): Boolean = req.path == context
   }
 
   object TextRenderer extends TheNav.Renderer[String] {
@@ -100,6 +107,7 @@ object Fixtures {
         val elt = doc.createElement("entry")
         elt.setTextContent(entry.name)
         elt.setAttribute("context", s"${entry.context}:${entry.action}")
+        elt.setAttribute("current", current.toString)
         elt.setAttribute("enabled", enabled.toString)
         Some(elt)
       } else {
@@ -108,8 +116,14 @@ object Fixtures {
     }
   }
 
+  def queryNodes(expression: String, element: Element): NodeList = {
+    val xpath = XPathFactory.newInstance().newXPath()
+    xpath.evaluate(expression, element, XPathConstants.NODESET).asInstanceOf[NodeList]
+  }
+
   def xmlToStr(elt: dom.Element): String = {
     val xf = TransformerFactory.newInstance().newTransformer()
+    xf.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "yes")
     xf.setOutputProperty(OutputKeys.METHOD, "xml")
     xf.setOutputProperty(OutputKeys.INDENT, "yes")
     val out = new StringWriter()

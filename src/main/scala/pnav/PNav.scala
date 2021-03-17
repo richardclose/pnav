@@ -5,34 +5,35 @@ package pnav
  * Framework for defining a hierarchical menu system
  * @tparam A Action, type associated with selected action (e.g. URL)
  * @tparam C Context, type carrying additional information (e.g. for permissioning, access control ...)
+ * @tparam R Request, type of context in which menu is rendered, e.g. HTTP request
  */
-trait PNav[A,C] {
+trait PNav[A, C, R] {
 
 	/**
 	 * Protocol for reading state of a menu entry from the context.
 	 */
 	trait EntryState {
-		def isEnabled(context: C): Boolean
-		def isVisible(context: C): Boolean
-		def isCurrent(context: C): Boolean
+		def isEnabled(context: C)(implicit req: R): Boolean
+		def isVisible(context: C)(implicit req: R): Boolean
+		def isCurrent(context: C)(implicit req: R): Boolean
 	}
 
 	/**
 	 * No-op EntryState
 	 */
 	object nilEntryState extends EntryState {
-		def isEnabled(context: C): Boolean = true
-		def isVisible(context: C): Boolean = true
-		def isCurrent(context: C): Boolean = false
+		def isEnabled(context: C)(implicit req: R): Boolean = true
+		def isVisible(context: C)(implicit req: R): Boolean = true
+		def isCurrent(context: C)(implicit req: R): Boolean = false
 	}
 
 	/**
 	 * Methods for rendering the navigation structure as display type.
-	 * @tparam R Rendered display type (e.g. string, XML tag, Scalatag)
+	 * @tparam D Rendered display type (e.g. string, XML tag, Scalatag)
 	 */
-	trait Renderer[R] {
-		def renderMenu(menu: Menu, renderedChildren: Seq[R], level: Int, enabled: Boolean, visible: Boolean, current: Boolean): Option[R]
-		def renderEntry(entry: Entry, level: Int, enabled: Boolean, visible: Boolean, current: Boolean): Option[R]
+	trait Renderer[D] {
+		def renderMenu(menu: Menu, renderedChildren: Seq[D], level: Int, enabled: Boolean, visible: Boolean, current: Boolean): Option[D]
+		def renderEntry(entry: Entry, level: Int, enabled: Boolean, visible: Boolean, current: Boolean): Option[D]
 	}
 
 	/**
@@ -72,7 +73,7 @@ trait PNav[A,C] {
 	/**
 	 * Render the menu with given renderer
 	 */
-	def render[R](root: Menu, es: EntryState, renderer: Renderer[R]): Option[R] = {
+	def render[D](root: Menu, es: EntryState, renderer: Renderer[D])(implicit req: R): Option[D] = {
 		val esa = new EntryStateAccumulator(es)
 		renderMenu(root, es, esa, 0, renderer)
 	}
@@ -87,7 +88,7 @@ trait PNav[A,C] {
 		var visibleCount = 0
 		var currentCount = 0
 
-		def process(context: C): (Boolean, Boolean, Boolean) = {
+		def process(context: C)(implicit req: R): (Boolean, Boolean, Boolean) = {
 			entryCount += 1
 			val ena = entryState.isEnabled(context)
 			val vis = entryState.isVisible(context)
@@ -110,7 +111,7 @@ trait PNav[A,C] {
 		def anyCurrent: Boolean = currentCount > 0
 	}
 
-	private def renderChildren[R](menu: Menu, es: EntryState, esa: EntryStateAccumulator, level: Int, renderer: Renderer[R]): Seq[R] =
+	private def renderChildren[D](menu: Menu, es: EntryState, esa: EntryStateAccumulator, level: Int, renderer: Renderer[D])(implicit req: R): Seq[D] =
 		menu.children.collect {
 		case Left(m) =>
 			renderMenu(m, es, esa, level + 1, renderer)
@@ -120,7 +121,7 @@ trait PNav[A,C] {
 			renderer.renderEntry(e, level + 1, ena, vis, cur)
 	}.flatten
 
-	private def renderMenu[R](menu: Menu, es: EntryState, esa: EntryStateAccumulator, level: Int, renderer: Renderer[R]): Option[R] = {
+	private def renderMenu[D](menu: Menu, es: EntryState, esa: EntryStateAccumulator, level: Int, renderer: Renderer[D])(implicit req: R): Option[D] = {
 		val esaLocal = new EntryStateAccumulator(es)
 		val renderedChildren = renderChildren(menu, es, esaLocal, level, renderer)
 		val ret = renderer.renderMenu(menu, renderedChildren, level, esaLocal.anyEnabled, esaLocal.anyVisible, esaLocal.anyCurrent)
